@@ -4,18 +4,6 @@ set -e -x
 set -o pipefail
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-SPARK_DIR="${DIR}/../../spark"
-SPARK_BUILD_DIR="${DIR}/../../spark-build"
-DIST_DIR="${SPARK_BUILD_DIR}/build/dist"
-
-function default_hadoop_version {
-    jq -r ".default_spark_dist.hadoop_version" "${SPARK_BUILD_DIR}/manifest.json"
-}
-
-function default_spark_dist {
-    jq -r ".default_spark_dist.uri" "${SPARK_BUILD_DIR}/manifest.json"
-}
-
 # Writes a Spark distribution to ${SPARK_BUILD_DIR}/build/dist/spark-*.tgz
 function make_distribution {
     local HADOOP_VERSION=${HADOOP_VERSION:-$(default_hadoop_version)}
