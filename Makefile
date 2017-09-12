@@ -53,17 +53,15 @@ prod-dist:
 	cd $(SPARK_DIR)
 	rm -rf spark-*.tgz
 	if [ -f make-distribution.sh ]; then \
-	# Spark <2.0
-		./make-distribution.sh --tgz "-Phadoop-${HADOOP_VERSION}" -Phive -Phive-thriftserver -DskipTests \
-	else \
-	# Spark >=2.0
+		./make-distribution.sh --tgz "-Phadoop-${HADOOP_VERSION}" -Phive -Phive-thriftserver -DskipTests; \
+	else; \
 		if [ -n `./build/mvn help:all-profiles | grep "mesos"` ]; then \
-			MESOS_PROFILE="-Pmesos" \
-		else \
-			MESOS_PROFILE="" \
-		fi \
-		./dev/make-distribution.sh --tgz "${MESOS_PROFILE}" "-Phadoop-${HADOOP_VERSION}" -Psparkr -Phive -Phive-thriftserver -DskipTests \
-	fi \
+			MESOS_PROFILE="-Pmesos"; \
+		else; \
+			MESOS_PROFILE=""; \
+		fi; \
+		./dev/make-distribution.sh --tgz "${MESOS_PROFILE}" "-Phadoop-${HADOOP_VERSION}" -Psparkr -Phive -Phive-thriftserver -DskipTests; \
+	fi; \
 	mkdir -p $(DIST_DIR)
 	cp spark-*.tgz $(DIST_DIR)
 
@@ -93,4 +91,4 @@ universe: cli docker
 test:
 	bin/test.sh
 
-.PHONY: cli dev-dist docker test universe
+.PHONY: cli dev-dist prod-dist docker test universe
