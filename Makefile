@@ -54,10 +54,10 @@ prod-dist:
 	rm -rf spark-*.tgz
 	if [ -f make-distribution.sh ]; then \
 		./make-distribution.sh --tgz "-Phadoop-${HADOOP_VERSION}" -Phive -Phive-thriftserver -DskipTests; \
-	else; \
+	else \
 		if [ -n `./build/mvn help:all-profiles | grep "mesos"` ]; then \
 			MESOS_PROFILE="-Pmesos"; \
-		else; \
+		else \
 			MESOS_PROFILE=""; \
 		fi; \
 		./dev/make-distribution.sh --tgz "${MESOS_PROFILE}" "-Phadoop-${HADOOP_VERSION}" -Psparkr -Phive -Phive-thriftserver -DskipTests; \
