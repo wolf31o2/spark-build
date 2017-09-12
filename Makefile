@@ -14,12 +14,13 @@ TEMPLATE_SPARK_DIST_URI := $(SPARK_DIST)
 TEMPLATE_DOCKER_IMAGE := $(DOCKER_IMAGE)
 
 .ONESHELL:
+.SHELLFLAGS := -e
 
 $(SPARK_DIR):
 	git clone https://github.com/mesosphere/spark $(SPARK_DIR)
 
 clean-dist:
-	rm -rf $(DIST_DIR)
+	[ -f $(DIST_DIR) ] && rm -rf $(DIST_DIR)
 
 manifest-dist: clean-dist
 	mkdir -p $(DIST_DIR)
@@ -96,4 +97,4 @@ universe: cli docker
 test:
 	bin/test.sh
 
-.PHONY: cli dev-dist prod-dist docker test universe
+.PHONY: clean-dist cli dev-dist prod-dist docker test universe
