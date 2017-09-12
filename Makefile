@@ -15,14 +15,18 @@ TEMPLATE_DOCKER_IMAGE := $(DOCKER_IMAGE)
 
 .ONESHELL:
 
-dist:
-	bin/dist.sh
-
 spark:
 	git clone https://github.com/mesosphere/spark
 
+clean-dist:
+	rm -rf $(DIST_DIR)
 
-dev-dist: spark
+manifest-dist: clean-dist
+	mkdir -p $(DIST_DIR)
+	cd $(DIST_DIR)
+	wget $(SPARK_DIST_URI)
+
+dev-dist: spark clean-dist
 	cd $(SPARK_DIR)
 	rm -rf spark-*.tgz
 	build/sbt -Xmax-classfile-name -Pmesos "-Phadoop-$(HADOOP_VERSION)" -Phive -Phive-thriftserver package
@@ -45,11 +49,10 @@ dev-dist: spark
 	cp -r python /tmp/spark-SNAPSHOT
 	cd /tmp
 	tar czf spark-SNAPSHOT.tgz spark-SNAPSHOT
-	rm -rf $(DIST_DIR)
 	mkdir -p $(DIST_DIR)
 	cp /tmp/spark-SNAPSHOT.tgz $(DIST_DIR)/
 
-prod-dist:
+prod-dist: spark clean-dist
 	cd $(SPARK_DIR)
 	rm -rf spark-*.tgz
 	if [ -f make-distribution.sh ]; then \
@@ -65,8 +68,9 @@ prod-dist:
 	mkdir -p $(DIST_DIR)
 	cp spark-*.tgz $(DIST_DIR)
 
+$(DIST_DIR): manifest-dist
 
-docker: dist
+docker: $(DIST_DIR)
 	tar xvf $(DIST_DIR)/spark-*.tgz -C $(DIST_DIR)
 	rm -rf $(BUILD_DIR)/docker
 	mkdir -p $(BUILD_DIR)/docker/dist
