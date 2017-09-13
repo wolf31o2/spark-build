@@ -20,7 +20,7 @@ $(SPARK_DIR):
 	git clone https://github.com/mesosphere/spark $(SPARK_DIR)
 
 clean-dist:
-	[ -f $(DIST_DIR) ] && rm -rf $(DIST_DIR)
+	[ ! -f $(DIST_DIR) ] || rm -rf $(DIST_DIR)
 
 manifest-dist: clean-dist
 	mkdir -p $(DIST_DIR)
