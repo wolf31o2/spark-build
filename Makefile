@@ -1,4 +1,5 @@
 ROOT_DIR := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
+TOOLS_DIR := $(ROOT_DIR)/bin/dcos-commons-tools
 SPARK_DIR := $(ROOT_DIR)/spark
 BUILD_DIR := $(ROOT_DIR)/build
 DIST_DIR := $(BUILD_DIR)/dist
@@ -8,6 +9,7 @@ HADOOP_VERSION := $(shell jq ".default_spark_dist.hadoop_version" "$(ROOT_DIR)/m
 SPARK_DIST := $(shell jq ".default_spark_dist.uri" "$(ROOT_DIR)/manifest.json")
 GIT_COMMIT := $(shell git rev-parse HEAD)
 DOCKER_IMAGE := mesosphere/spark-dev:$(GIT_COMMIT)
+SCALA_TEST_JAR := $(ROOT_DIR)/tests/jobs/scala/target/scala-2.11/dcos-spark-scala-tests-assembly-0.1-SNAPSHOT.jar
 
 TEMPLATE_CLI_VERSION := $(CLI_VERSION)
 TEMPLATE_SPARK_DIST_URI := $(SPARK_DIST)
@@ -18,6 +20,9 @@ SHELLFLAGS := -e
 
 $(SPARK_DIR):
 	git clone https://github.com/mesosphere/spark $(SPARK_DIR)
+
+build-env:
+	docker build -t mesosphere/spark-build:$(GIT_COMMIT) .
 
 clean-dist:
 	if [ -d $(DIST_DIR) ]; then \
@@ -83,7 +88,6 @@ docker: $(DIST_DIR)
 	cd $(BUILD_DIR)/docker && docker build -t $(DOCKER_IMAGE) .
 	docker push $(DOCKER_IMAGE)
 
-
 cli:
 	$(MAKE) --directory=cli all
 
@@ -96,7 +100,21 @@ universe: cli docker
         $(ROOT_DIR)/cli/dcos-spark/dcos-spark.exe \
         $(ROOT_DIR)/cli/python/dist/*.whl
 
-test:
-	bin/test.sh
+$(SCALA_TEST_JAR):
+	cd tests/jobs/scala
+	sbt assembly
 
-.PHONY: clean-dist cli dev-dist prod-dist docker test universe
+test-env:
+	python3 -m venv $(ROOT_DIR)/test-env
+	pip3 install -r $(ROOT_DIR)/tests/requirements.txt
+
+# this can take STUB_UNIVERSE optionally
+test: test-env
+	source $(ROOT_DIR)/test-env/bin/activate
+	if [ "$(SECURITY)" = "strict" ]; then \
+        $(TOOLS_DIR)/setup_permissions.sh root "*"; \
+        $(TOOLS_DIR)/setup_permissions.sh root hdfs-role; \
+    fi; \
+    py.test -vv $(ROOT_DIR)/tests
+
+.PHONY: build-env clean-dist cli dev-dist prod-dist docker test universe

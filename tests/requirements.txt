@@ -1,2 +1,6 @@
 boto
-dcos-shakedown
+dcoscli==0.4.17
+dcos==0.4.17
+dcos-shakedown==1.4.4
+teamcity-messages
+git+https://github.com/dcos/dcos-test-utils@8825756e8aa465557d8de3f03116d6d80087b010
