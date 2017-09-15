@@ -14,7 +14,7 @@ TEMPLATE_SPARK_DIST_URI := $(SPARK_DIST)
 TEMPLATE_DOCKER_IMAGE := $(DOCKER_IMAGE)
 
 .ONESHELL:
-.SHELLFLAGS := -e
+SHELLFLAGS := -e
 
 $(SPARK_DIR):
 	git clone https://github.com/mesosphere/spark $(SPARK_DIR)
