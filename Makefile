@@ -32,7 +32,7 @@ clean-dist:
 manifest-dist: clean-dist
 	mkdir -p $(DIST_DIR)
 	cd $(DIST_DIR)
-	wget $(SPARK_DIST_URI)
+	wget $(SPARK_DIST)
 
 dev-dist: $(SPARK_DIR) clean-dist
 	cd $(SPARK_DIR)
