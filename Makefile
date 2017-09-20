@@ -20,8 +20,9 @@ S3_PREFIX := autodelete7d
 $(SPARK_DIR):
 	git clone https://github.com/mesosphere/spark $(SPARK_DIR)
 
-dcoker-build:
+docker-build:
 	docker build -t $(DOCKER_BUILD_IMAGE) .
+	echo $(DOCKER_BUILD_IMAGE) > docker-build
 
 clean-dist:
 	@if [ -d $(DIST_DIR) ]; then \
@@ -90,6 +91,7 @@ docker-dist: $(DIST_DIR)
 	cp -r docker/* $(BUILD_DIR)/docker
 	cd $(BUILD_DIR)/docker && docker build -t $(DOCKER_DIST_IMAGE) .
 	docker push $(DOCKER_DIST_IMAGE)
+	echo $(DOCKER_DIST_IMAGE) > docker-dist
 
 cli:
 	$(MAKE) --directory=cli all
@@ -154,4 +156,4 @@ define spark_dist
 endef
 
 
-.PHONY: build-env clean clean-dist clean-test-env cli cluster dev-dist prod-dist docker-dist docker-build docker-login test
+.PHONY: build-env clean clean-dist clean-test-env cli cluster dev-dist prod-dist docker-login test
