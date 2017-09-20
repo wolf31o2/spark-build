@@ -125,11 +125,10 @@ clean-test-env:
 
 test-cluster: test-env
 	$(eval export DCOS_LAUNCH_CONFIG_BODY)
-	$(eval ssh-agent -s)
 	@if [ -z $(CLUSTER_URL) ]; then \
 	  source $(ROOT_DIR)/test-env/bin/activate; \
 	  echo "$$DCOS_LAUNCH_CONFIG_BODY" > dcos_launch_config.yaml; \
-	  dcos-launch create -c dcos_launch_config.yaml; \
+	  dcos-launch create -c dcos_launch_config.yaml || exit 1; \
 	  dcos-launch wait; \
 	else \
 	  echo "CLUSTER_URL detected in env; not deploying a new cluster"; \
