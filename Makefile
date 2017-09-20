@@ -165,7 +165,8 @@ test: test-env test-cluster $(DCOS_TEST_JAR_PATH) $(SPARK_TEST_JAR_PATH) stub-un
         $(TOOLS_DIR)/setup_permissions.sh root "*"; \
         $(TOOLS_DIR)/setup_permissions.sh root hdfs-role; \
     fi; \
-    SCALA_TEST_JAR=$(DCOS_TEST_JAR_PATH) \
+    $(TOOLS_DIR)/./dcos_login.py
+	SCALA_TEST_JAR=$(DCOS_TEST_JAR_PATH) \
 	  TEST_JAR_PATH=$(SPARK_TEST_JAR_PATH) \
 	  py.test -vv $(ROOT_DIR)/tests
 
