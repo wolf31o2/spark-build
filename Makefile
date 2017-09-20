@@ -22,7 +22,7 @@ $(SPARK_DIR):
 
 docker-build:
 	docker build -t $(DOCKER_BUILD_IMAGE) .
-	echo $(DOCKER_BUILD_IMAGE) > docker-build
+	echo $(DOCKER_BUILD_IMAGE) > $@
 
 clean-dist:
 	@if [ -d $(DIST_DIR) ]; then \
@@ -91,7 +91,7 @@ docker-dist: $(DIST_DIR)
 	cp -r docker/* $(BUILD_DIR)/docker
 	cd $(BUILD_DIR)/docker && docker build -t $(DOCKER_DIST_IMAGE) .
 	docker push $(DOCKER_DIST_IMAGE)
-	echo $(DOCKER_DIST_IMAGE) > docker-dist
+	echo $(DOCKER_DIST_IMAGE) > $@
 
 cli:
 	$(MAKE) --directory=cli all
@@ -123,8 +123,22 @@ test-env:
 clean-test-env:
 	rm -rf test-env
 
-cluster: test-env
+test-cluster: test-env
+	$(eval export DCOS_LAUNCH_CONFIG_BODY)
+	$(eval ssh-agent -s)
+	@if [ -z $(CLUSTER_URL) ]; then \
+	  source $(ROOT_DIR)/test-env/bin/activate; \
+	  echo "$$DCOS_LAUNCH_CONFIG_BODY" > dcos_launch_config.yaml; \
+	  dcos-launch create -c dcos_launch_config.yaml; \
+	  dcos-launch wait; \
+	else \
+	  echo "CLUSTER_URL detected in env; not deploying a new cluster"; \
+	fi; \
+
+clean-test-cluster: test-env
 	source $(ROOT_DIR)/test-env/bin/activate
+	dcos-launch delete
+
 
 mesos-spark-integration-tests:
 	git clone https://github.com/typesafehub/mesos-spark-integration-tests $(ROOT_DIR)/mesos-spark-integration-tests
@@ -137,9 +151,17 @@ $(SPARK_TEST_JAR_PATH): mesos-spark-integration-tests
 	sbt clean compile test
 	cp test-runner/target/scala-2.11/mesos-spark-integration-tests-assembly-0.1.0.jar $(SPARK_TEST_JAR_PATH)
 
-test: test-env $(DCOS_TEST_JAR_PATH) $(SPARK_TEST_JAR_PATH) stub-universe.properties
+test: test-env test-cluster $(DCOS_TEST_JAR_PATH) $(SPARK_TEST_JAR_PATH) stub-universe.properties
 	source $(ROOT_DIR)/test-env/bin/activate
 	export `cat stub-universe.properties`
+	if [ -z $(CLUSTER_URL) ]; then \
+	    export CLUSTER_URL=https://`dcos-launch describe | jq -r .masters[0].public_ip`; \
+	    if [ `cat cluster_info.json | jq .key_helper` == 'true' ]; then \
+	      cat cluster_info.json | jq -r .ssh_private_key > test_cluster_ssh_key; \
+	      chmod 600 test_cluster_ssh_key; \
+		  ssh-add test_cluster_ssh_key; \
+	    fi; \
+	fi; \
 	if [ "$(SECURITY)" = "strict" ]; then \
         $(TOOLS_DIR)/setup_permissions.sh root "*"; \
         $(TOOLS_DIR)/setup_permissions.sh root hdfs-role; \
@@ -160,4 +182,20 @@ define does_profile_exist
 @./build/mvn help:all-profiles | grep $(1)
 endef
 
-.PHONY: build-env clean clean-dist clean-test-env cli cluster dev-dist prod-dist docker-login test
+
+define DCOS_LAUNCH_CONFIG_BODY
+---
+launch_config_version: 1
+deployment_name: dcos-ci-test-spark-build-$(shell cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 10 | head -n 1)
+template_url: https://s3.amazonaws.com/downloads.mesosphere.io/dcos-enterprise/testing/master/cloudformation/ee.single-master.cloudformation.json
+provider: aws
+key_helper: true
+template_parameters:
+  AdminLocation: 0.0.0.0/0
+  PublicSlaveInstanceCount: 1
+  SlaveInstanceCount: 5
+ssh_user: core
+endef
+
+
+.PHONY: foo clean clean-dist clean-test-env cli test-cluster clean-test-cluster manifest-dist dev-dist prod-dist docker-login test
