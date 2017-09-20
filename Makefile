@@ -24,7 +24,7 @@ dcoker-build:
 	docker build -t $(DOCKER_BUILD_IMAGE) .
 
 clean-dist:
-	if [ -d $(DIST_DIR) ]; then \
+	@if [ -d $(DIST_DIR) ]; then \
 		rm -rf $(DIST_DIR); \
 	fi; \
 
@@ -94,12 +94,11 @@ docker-dist: $(DIST_DIR)
 cli:
 	$(MAKE) --directory=cli all
 
-stub-universe.properties: cli docker-dist
+stub-universe.properties: cli $(DIST_DIR)
 	aws s3 cp --acl public-read "$(DIST_DIR)/$(spark_dist)" "s3://$(S3_BUCKET)/$(S3_PREFIX)/spark/$(GIT_COMMIT)/"
-	TEMPLATE_CLI_VERSION=${CLI_VERSION} \
-	TEMPLATE_SPARK_DIST_URI="http://$(S3_BUCKET).s3.amazonaws.com/$(S3_PREFIX)/spark/$(GIT_COMMIT)/$(spark_dist)"\
-	TEMPLATE_DOCKER_IMAGE=${DOCKER_IMAGE}
-	DOCKER_IMAGE=$(DOCKER_DIST_IMAGE)
+	TEMPLATE_CLI_VERSION=$(CLI_VERSION) \
+	TEMPLATE_SPARK_DIST_URI="http://$(S3_BUCKET).s3.amazonaws.com/$(S3_PREFIX)/spark/$(GIT_COMMIT)/$(spark_dist)" \
+	TEMPLATE_DOCKER_IMAGE=$(DOCKER_DIST_IMAGE) \
 		$(ROOT_DIR)/bin/dcos-commons-tools/aws_upload.py \
 		spark \
         $(ROOT_DIR)/universe/ \
@@ -114,9 +113,6 @@ $(DCOS_TEST_JAR_PATH):
 	sbt assembly
 	cp $(ROOT_DIR)/tests/jobs/scala/target/scala-2.11/dcos-spark-scala-tests-assembly-0.1-SNAPSHOT.jar $(DCOS_TEST_JAR_PATH)
 
-clean-scala-test-jar:
-	rm $(SCALA_TEST_JAR)
-
 test-env:
 	python3 -m venv $(ROOT_DIR)/test-env
 	source $(ROOT_DIR)/test-env/bin/activate
@@ -128,16 +124,16 @@ clean-test-env:
 cluster: test-env
 	source $(ROOT_DIR)/test-env/bin/activate
 
-mesos-spark-integration-test:
+mesos-spark-integration-tests:
 	git clone https://github.com/typesafehub/mesos-spark-integration-tests $(ROOT_DIR)/mesos-spark-integration-tests
 
 SPARK_TEST_JAR_PATH := $(ROOT_DIR)/mesos-spark-integration-tests-assembly-0.1.0.jar
-$(SPARK_TEST_JAR_PATH): mesos-spark-integration-test
+$(SPARK_TEST_JAR_PATH): mesos-spark-integration-tests
 	cd $(ROOT_DIR)/mesos-spark-integration-tests/test-runner
 	sbt assembly
 	cd ..
 	sbt clean compile test
-	cp ls test-runner/target/scala-2.11/mesos-spark-integration-tests-assembly-0.1.0.jar $(SPARK_TEST_JAR_PATH)
+	cp test-runner/target/scala-2.11/mesos-spark-integration-tests-assembly-0.1.0.jar $(SPARK_TEST_JAR_PATH)
 
 test: test-env $(DCOS_TEST_JAR_PATH) $(SPARK_TEST_JAR_PATH) stub-universe.properties
 	source $(ROOT_DIR)/test-env/bin/activate
@@ -150,11 +146,7 @@ test: test-env $(DCOS_TEST_JAR_PATH) $(SPARK_TEST_JAR_PATH) stub-universe.proper
 	  TEST_JAR_PATH=$(SPARK_TEST_JAR_PATH) \
 	  py.test -vv $(ROOT_DIR)/tests
 
-clean: clean-scala-jar clean-dist clean-test-env
-
-define upload_to_s3
-aws s3 cp --acl public-read "$(DIST_DIR)/$(spark_dist)" "${S3_URL}"
-endef
+clean: clean-dist clean-test-env
 
 define spark_dist
 @cd $(DIST_DIR)
@@ -162,4 +154,4 @@ define spark_dist
 endef
 
 
-.PHONY: build-env clean clean-dist clean-test-env clean-scala-build-jar cli cluster dev-dist prod-dist docker-dist docker-build docker-login test
+.PHONY: build-env clean clean-dist clean-test-env cli cluster dev-dist prod-dist docker-dist docker-build docker-login test
