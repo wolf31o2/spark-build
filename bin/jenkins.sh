@@ -38,17 +38,6 @@ function set_hadoop_versions {
     HADOOP_VERSIONS=( "2.4" "2.6" "2.7" )
 }
 
-function build_and_test() {
-    DIST=prod make dist
-    SPARK_DIST=$(cd ${SPARK_DIR} && ls spark-*.tgz)
-    S3_URL="s3://${S3_BUCKET}/${S3_PREFIX}/spark/${GIT_COMMIT}/" upload_to_s3
-
-    SPARK_DIST_URI="http://${S3_BUCKET}.s3.amazonaws.com/${S3_PREFIX}/spark/${GIT_COMMIT}/${SPARK_DIST}" make universe
-
-    export $(cat "${WORKSPACE}/stub-universe.properties")
-    make test
-}
-
 # $1: profile (e.g. "hadoop-2.6")
 function does_profile_exist() {
     (cd "${SPARK_DIR}" && ./build/mvn help:all-profiles | grep "$1")
