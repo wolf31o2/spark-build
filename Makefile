@@ -1,6 +1,5 @@
 ROOT_DIR := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 TOOLS_DIR := $(ROOT_DIR)/bin/dcos-commons-tools
-SPARK_DIR := $(ROOT_DIR)/spark
 BUILD_DIR := $(ROOT_DIR)/build
 DIST_DIR := $(BUILD_DIR)/dist
 SHELL := /bin/bash
@@ -17,6 +16,7 @@ S3_PREFIX := autodelete7d
 
 .ONESHELL:
 
+SPARK_DIR := $(ROOT_DIR)/spark
 $(SPARK_DIR):
 	git clone https://github.com/mesosphere/spark $(SPARK_DIR)
 
@@ -80,7 +80,7 @@ prod-dist: $(SPARK_DIR) clean-dist
 $(DIST_DIR): manifest-dist
 
 docker-login:
-	docker login --email=docker@mesosphere.io --username="${DOCKER_USERNAME}" --password="${DOCKER_PASSWORD}"
+	docker login --email="${DOCKER_EMAIL}" --username="${DOCKER_USERNAME}" --password="${DOCKER_PASSWORD}"
 
 docker-dist: $(DIST_DIR)
 	tar xvf $(DIST_DIR)/spark-*.tgz -C $(DIST_DIR)
@@ -155,5 +155,9 @@ define spark_dist
 @ls spark-*.tgz
 endef
 
+define does_profile_exist
+@cd "$(SPARK_DIR)"
+@./build/mvn help:all-profiles | grep $(1)
+endef
 
 .PHONY: build-env clean clean-dist clean-test-env cli cluster dev-dist prod-dist docker-login test
