@@ -1,6 +1,7 @@
 ROOT_DIR := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 TOOLS_DIR := $(ROOT_DIR)/bin/dcos-commons-tools
 BUILD_DIR := $(ROOT_DIR)/build
+CLI_DIST_DIR := $(BUILD_DIR)/cli_dist
 DIST_DIR := $(BUILD_DIR)/dist
 SHELL := /bin/bash
 SHELLFLAGS := -e
@@ -24,17 +25,12 @@ docker-build:
 	docker build -t $(DOCKER_BUILD_IMAGE) .
 	echo $(DOCKER_BUILD_IMAGE) > $@
 
-clean-dist:
-	@if [ -d $(DIST_DIR) ]; then \
-		rm -rf $(DIST_DIR); \
-	fi; \
-
-manifest-dist: clean-dist
+manifest-dist:
 	mkdir -p $(DIST_DIR)
 	cd $(DIST_DIR)
 	wget $(SPARK_DIST_URI)
 
-dev-dist: $(SPARK_DIR) clean-dist
+dev-dist: $(SPARK_DIR)
 	cd $(SPARK_DIR)
 	rm -rf spark-*.tgz
 	build/sbt -Xmax-classfile-name -Pmesos "-Phadoop-$(HADOOP_VERSION)" -Phive -Phive-thriftserver package
@@ -60,7 +56,7 @@ dev-dist: $(SPARK_DIR) clean-dist
 	mkdir -p $(DIST_DIR)
 	cp /tmp/spark-SNAPSHOT.tgz $(DIST_DIR)/
 
-prod-dist: $(SPARK_DIR) clean-dist
+prod-dist: $(SPARK_DIR)
 	cd $(SPARK_DIR)
 	rm -rf spark-*.tgz
 	if [ -f make-distribution.sh ]; then \
@@ -93,22 +89,27 @@ docker-dist: $(DIST_DIR)
 	docker push $(DOCKER_DIST_IMAGE)
 	echo $(DOCKER_DIST_IMAGE) > $@
 
-cli:
+$(CLI_DIST_DIR):
 	$(MAKE) --directory=cli all
+	mkdir -p $@
+	mv $(ROOT_DIR)/cli/dcos-spark/dcos-spark-darwin $@/
+	mv $(ROOT_DIR)/cli/dcos-spark/dcos-spark-linux $@/
+	mv $(ROOT_DIR)/cli/dcos-spark/dcos-spark.exe $@/
+	mv $(ROOT_DIR)/cli/python/dist/*.whl $@/
 
-stub-universe-url: cli $(DIST_DIR)
+UNIVERSE_URL_PATH := stub-universe-url
+$(UNIVERSE_URL_PATH): $(CLI_DIST_DIR) $(DIST_DIR)
 	aws s3 cp --acl public-read "$(DIST_DIR)/$(spark_dist)" "s3://$(S3_BUCKET)/$(S3_PREFIX)/spark/$(GIT_COMMIT)/"
-	UNIVERSE_URL_PATH=$@ \
 	TEMPLATE_CLI_VERSION=$(CLI_VERSION) \
 	TEMPLATE_SPARK_DIST_URI="http://$(S3_BUCKET).s3.amazonaws.com/$(S3_PREFIX)/spark/$(GIT_COMMIT)/$(spark_dist)" \
 	TEMPLATE_DOCKER_IMAGE=$(DOCKER_DIST_IMAGE) \
 		$(TOOLS_DIR)/publish_aws.py \
 		spark \
         $(ROOT_DIR)/universe/ \
-        $(ROOT_DIR)/cli/dcos-spark/dcos-spark-darwin \
-        $(ROOT_DIR)/cli/dcos-spark/dcos-spark-linux \
-        $(ROOT_DIR)/cli/dcos-spark/dcos-spark.exe \
-        $(ROOT_DIR)/cli/python/dist/*.whl
+        $(CLI_DIST_DIR)/dcos-spark-darwin \
+        $(CLI_DIST_DIR)/dcos-spark-linux \
+        $(CLI_DIST_DIR)/dcos-spark.exe \
+        $(CLI_DIST_DIR)/*.whl \
 
 DCOS_TEST_JAR_PATH := $(ROOT_DIR)/dcos-spark-scala-tests-assembly-0.1-SNAPSHOT.jar
 $(DCOS_TEST_JAR_PATH):
@@ -120,9 +121,6 @@ test-env:
 	python3 -m venv $(ROOT_DIR)/test-env
 	source $(ROOT_DIR)/test-env/bin/activate
 	pip3 install -r $(ROOT_DIR)/tests/requirements.txt
-
-clean-test-env:
-	rm -rf test-env
 
 cluster-url: test-env
 	$(eval export DCOS_LAUNCH_CONFIG_BODY)
@@ -149,7 +147,7 @@ $(SPARK_TEST_JAR_PATH): mesos-spark-integration-tests
 	cp test-runner/target/scala-2.11/mesos-spark-integration-tests-assembly-0.1.0.jar $(SPARK_TEST_JAR_PATH)
 
 PYTEST_ARGS := -vv
-test: cluster-url test-env $(DCOS_TEST_JAR_PATH) $(SPARK_TEST_JAR_PATH) stub-universe-url
+test: cluster-url test-env $(DCOS_TEST_JAR_PATH) $(SPARK_TEST_JAR_PATH) $(UNIVERSE_URL_PATH)
 	source $(ROOT_DIR)/test-env/bin/activate
 	if [ -z $(CLUSTER_URL) ]; then \
 	    if [ `cat cluster_info.json | jq .key_helper` == 'true' ]; then \
@@ -171,7 +169,10 @@ test: cluster-url test-env $(DCOS_TEST_JAR_PATH) $(SPARK_TEST_JAR_PATH) stub-uni
 	  TEST_JAR_PATH=$(SPARK_TEST_JAR_PATH) \
 	  py.test $(PYTEST_ARGS) $(ROOT_DIR)/tests
 
-clean: clean-dist clean-test-env
+clean:
+	rm -rf $(ROOT_DIR)/test-env
+	rm -rf $(CLI_DIST_DIR)
+	rm -rf $(DIST_DIR)
 
 define spark_dist
 @cd $(DIST_DIR)
@@ -199,4 +200,4 @@ ssh_user: core
 endef
 
 
-.PHONY: clean clean-dist clean-test-env cli clean-test-cluster manifest-dist dev-dist prod-dist docker-login test
+.PHONY: clean manifest-dist dev-dist prod-dist docker-login test
