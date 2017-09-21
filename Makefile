@@ -157,13 +157,11 @@ test: cluster-url test-env $(DCOS_TEST_JAR_PATH) $(SPARK_TEST_JAR_PATH) $(UNIVER
 		  ssh-add test_cluster_ssh_key; \
 	    fi; \
 	fi; \
+	$(TOOLS_DIR)/./dcos_login.py
 	if [ "$(SECURITY)" = "strict" ]; then \
         $(TOOLS_DIR)/setup_permissions.sh root "*"; \
         $(TOOLS_DIR)/setup_permissions.sh root hdfs-role; \
     fi; \
-	dcos config set core.ssl_verify false
-	dcos config set core.dcos_url `cat cluster-url`
-	$(TOOLS_DIR)/./dcos_login.py
 	dcos package repo add --index=0 spark-aws `cat stub-universe-url`
 	SCALA_TEST_JAR=$(DCOS_TEST_JAR_PATH) \
 	  TEST_JAR_PATH=$(SPARK_TEST_JAR_PATH) \
