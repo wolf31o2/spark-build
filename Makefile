@@ -101,7 +101,7 @@ $(CLI_DIST_DIR):
 UNIVERSE_URL_PATH := stub-universe-url
 $(UNIVERSE_URL_PATH): $(CLI_DIST_DIR) $(DIST_DIR)
 	aws s3 cp --acl public-read "$(DIST_DIR)/$(spark_dist)" "s3://$(S3_BUCKET)/$(S3_PREFIX)/spark/$(GIT_COMMIT)/"
-	UNIVERSE_URL_PATH=$(UNIVERSE_URL_PATH)
+	UNIVERSE_URL_PATH=$(UNIVERSE_URL_PATH) \
 	TEMPLATE_CLI_VERSION=$(CLI_VERSION) \
 	TEMPLATE_SPARK_DIST_URI="http://$(S3_BUCKET).s3.amazonaws.com/$(S3_PREFIX)/spark/$(GIT_COMMIT)/$(spark_dist)" \
 	TEMPLATE_DOCKER_IMAGE=$(DOCKER_DIST_IMAGE) \
@@ -112,6 +112,7 @@ $(UNIVERSE_URL_PATH): $(CLI_DIST_DIR) $(DIST_DIR)
         $(CLI_DIST_DIR)/dcos-spark-linux \
         $(CLI_DIST_DIR)/dcos-spark.exe \
         $(CLI_DIST_DIR)/*.whl \
+	[ -f $(UNIVERSE_URL_PATH) ] || exit 1
 
 DCOS_TEST_JAR_PATH := $(ROOT_DIR)/dcos-spark-scala-tests-assembly-0.1-SNAPSHOT.jar
 $(DCOS_TEST_JAR_PATH):
