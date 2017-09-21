@@ -66,7 +66,7 @@ prod-dist: $(SPARK_DIR) clean-dist
 	if [ -f make-distribution.sh ]; then \
 		./make-distribution.sh --tgz "-Phadoop-${HADOOP_VERSION}" -Phive -Phive-thriftserver -DskipTests; \
 	else \
-		if [ -n `./build/mvn help:all-profiles | grep "mesos"` ]; then \
+		if [ -n $(does_profile_exist,mesos) ]; then \
 			MESOS_PROFILE="-Pmesos"; \
 		else \
 			MESOS_PROFILE=""; \
@@ -96,12 +96,13 @@ docker-dist: $(DIST_DIR)
 cli:
 	$(MAKE) --directory=cli all
 
-stub-universe.properties: cli $(DIST_DIR)
+stub-universe-url: cli $(DIST_DIR)
 	aws s3 cp --acl public-read "$(DIST_DIR)/$(spark_dist)" "s3://$(S3_BUCKET)/$(S3_PREFIX)/spark/$(GIT_COMMIT)/"
+	UNIVERSE_URL_PATH=$@ \
 	TEMPLATE_CLI_VERSION=$(CLI_VERSION) \
 	TEMPLATE_SPARK_DIST_URI="http://$(S3_BUCKET).s3.amazonaws.com/$(S3_PREFIX)/spark/$(GIT_COMMIT)/$(spark_dist)" \
 	TEMPLATE_DOCKER_IMAGE=$(DOCKER_DIST_IMAGE) \
-		$(ROOT_DIR)/bin/dcos-commons-tools/aws_upload.py \
+		$(TOOLS_DIR)/publish_aws.py \
 		spark \
         $(ROOT_DIR)/universe/ \
         $(ROOT_DIR)/cli/dcos-spark/dcos-spark-darwin \
@@ -123,21 +124,22 @@ test-env:
 clean-test-env:
 	rm -rf test-env
 
-test-cluster: test-env
+cluster-url: test-env
 	$(eval export DCOS_LAUNCH_CONFIG_BODY)
 	@if [ -z $(CLUSTER_URL) ]; then \
 	  source $(ROOT_DIR)/test-env/bin/activate; \
 	  echo "$$DCOS_LAUNCH_CONFIG_BODY" > dcos_launch_config.yaml; \
 	  dcos-launch create -c dcos_launch_config.yaml || exit 1; \
 	  dcos-launch wait; \
+	  echo https://`dcos-launch describe | jq -r .masters[0].public_ip` > $@; \
 	else \
 	  echo "CLUSTER_URL detected in env; not deploying a new cluster"; \
+	  echo $(CLUSTER_URL) > $@; \
 	fi; \
 
 clean-test-cluster: test-env
 	source $(ROOT_DIR)/test-env/bin/activate
 	dcos-launch delete
-
 
 mesos-spark-integration-tests:
 	git clone https://github.com/typesafehub/mesos-spark-integration-tests $(ROOT_DIR)/mesos-spark-integration-tests
@@ -150,14 +152,13 @@ $(SPARK_TEST_JAR_PATH): mesos-spark-integration-tests
 	sbt clean compile test
 	cp test-runner/target/scala-2.11/mesos-spark-integration-tests-assembly-0.1.0.jar $(SPARK_TEST_JAR_PATH)
 
-test: test-env test-cluster $(DCOS_TEST_JAR_PATH) $(SPARK_TEST_JAR_PATH) stub-universe.properties
+test: cluster-url test-env $(DCOS_TEST_JAR_PATH) $(SPARK_TEST_JAR_PATH) stub-universe-url
 	source $(ROOT_DIR)/test-env/bin/activate
-	export `cat stub-universe.properties`
 	if [ -z $(CLUSTER_URL) ]; then \
-	    export CLUSTER_URL=https://`dcos-launch describe | jq -r .masters[0].public_ip`; \
 	    if [ `cat cluster_info.json | jq .key_helper` == 'true' ]; then \
 	      cat cluster_info.json | jq -r .ssh_private_key > test_cluster_ssh_key; \
 	      chmod 600 test_cluster_ssh_key; \
+		  eval `ssh-agent -s`; \
 		  ssh-add test_cluster_ssh_key; \
 	    fi; \
 	fi; \
@@ -165,7 +166,10 @@ test: test-env test-cluster $(DCOS_TEST_JAR_PATH) $(SPARK_TEST_JAR_PATH) stub-un
         $(TOOLS_DIR)/setup_permissions.sh root "*"; \
         $(TOOLS_DIR)/setup_permissions.sh root hdfs-role; \
     fi; \
-    $(TOOLS_DIR)/./dcos_login.py
+	dcos config set core.ssl_verify false
+	dcos config set core.dcos_url `cat cluster-url`
+	$(TOOLS_DIR)/./dcos_login.py
+	dcos package repo add --index=0 spark-aws `cat stub-universe-url`
 	SCALA_TEST_JAR=$(DCOS_TEST_JAR_PATH) \
 	  TEST_JAR_PATH=$(SPARK_TEST_JAR_PATH) \
 	  py.test -vv $(ROOT_DIR)/tests
@@ -198,4 +202,4 @@ ssh_user: core
 endef
 
 
-.PHONY: foo clean clean-dist clean-test-env cli test-cluster clean-test-cluster manifest-dist dev-dist prod-dist docker-login test
+.PHONY: clean clean-dist clean-test-env cli clean-test-cluster manifest-dist dev-dist prod-dist docker-login test
