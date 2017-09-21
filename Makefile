@@ -112,7 +112,7 @@ $(UNIVERSE_URL_PATH): $(CLI_DIST_DIR) $(DIST_DIR)
         $(CLI_DIST_DIR)/dcos-spark-linux \
         $(CLI_DIST_DIR)/dcos-spark.exe \
         $(CLI_DIST_DIR)/*.whl \
-	[ -f $(UNIVERSE_URL_PATH) ] || exit 1
+	[ -f $@ ] || exit 1
 
 DCOS_TEST_JAR_PATH := $(ROOT_DIR)/dcos-spark-scala-tests-assembly-0.1-SNAPSHOT.jar
 $(DCOS_TEST_JAR_PATH):
@@ -177,13 +177,11 @@ clean:
 	rm -rf $(DIST_DIR)
 
 define spark_dist
-@cd $(DIST_DIR)
-@ls spark-*.tgz
+`cd $(DIST_DIR) && ls spark-*.tgz`
 endef
 
 define does_profile_exist
-@cd "$(SPARK_DIR)"
-@./build/mvn help:all-profiles | grep $(1)
+`cd "$(SPARK_DIR)" && ./build/mvn help:all-profiles | grep $(1)`
 endef
 
 
