@@ -73,7 +73,8 @@ prod-dist: $(SPARK_DIR)
 	cp spark-*.tgz $(DIST_DIR)
 
 # this target serves as default dist type
-$(DIST_DIR): manifest-dist
+$(DIST_DIR):
+	$(MAKE) manifest-dist
 
 docker-login:
 	docker login --email="${DOCKER_EMAIL}" --username="${DOCKER_USERNAME}" --password="${DOCKER_PASSWORD}"
@@ -100,6 +101,7 @@ $(CLI_DIST_DIR):
 UNIVERSE_URL_PATH := stub-universe-url
 $(UNIVERSE_URL_PATH): $(CLI_DIST_DIR) $(DIST_DIR)
 	aws s3 cp --acl public-read "$(DIST_DIR)/$(spark_dist)" "s3://$(S3_BUCKET)/$(S3_PREFIX)/spark/$(GIT_COMMIT)/"
+	UNIVERSE_URL_PATH=$(UNIVERSE_URL_PATH)
 	TEMPLATE_CLI_VERSION=$(CLI_VERSION) \
 	TEMPLATE_SPARK_DIST_URI="http://$(S3_BUCKET).s3.amazonaws.com/$(S3_PREFIX)/spark/$(GIT_COMMIT)/$(spark_dist)" \
 	TEMPLATE_DOCKER_IMAGE=$(DOCKER_DIST_IMAGE) \
@@ -147,7 +149,7 @@ $(SPARK_TEST_JAR_PATH): mesos-spark-integration-tests
 	cp test-runner/target/scala-2.11/mesos-spark-integration-tests-assembly-0.1.0.jar $(SPARK_TEST_JAR_PATH)
 
 PYTEST_ARGS := -vv
-test: cluster-url test-env $(DCOS_TEST_JAR_PATH) $(SPARK_TEST_JAR_PATH) $(UNIVERSE_URL_PATH)
+test: test-env $(DCOS_TEST_JAR_PATH) $(SPARK_TEST_JAR_PATH) $(UNIVERSE_URL_PATH) cluster-url
 	source $(ROOT_DIR)/test-env/bin/activate
 	if [ -z $(CLUSTER_URL) ]; then \
 	    if [ `cat cluster_info.json | jq .key_helper` == 'true' ]; then \
@@ -157,6 +159,7 @@ test: cluster-url test-env $(DCOS_TEST_JAR_PATH) $(SPARK_TEST_JAR_PATH) $(UNIVER
 		  ssh-add test_cluster_ssh_key; \
 	    fi; \
 	fi; \
+	export CLUSTER_URL=`cat cluster-url`
 	$(TOOLS_DIR)/./dcos_login.py
 	if [ "$(SECURITY)" = "strict" ]; then \
         $(TOOLS_DIR)/setup_permissions.sh root "*"; \
