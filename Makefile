@@ -137,10 +137,6 @@ cluster-url: test-env
 	  echo $(CLUSTER_URL) > $@; \
 	fi; \
 
-clean-test-cluster: test-env
-	source $(ROOT_DIR)/test-env/bin/activate
-	dcos-launch delete
-
 mesos-spark-integration-tests:
 	git clone https://github.com/typesafehub/mesos-spark-integration-tests $(ROOT_DIR)/mesos-spark-integration-tests
 
@@ -152,6 +148,7 @@ $(SPARK_TEST_JAR_PATH): mesos-spark-integration-tests
 	sbt clean compile test
 	cp test-runner/target/scala-2.11/mesos-spark-integration-tests-assembly-0.1.0.jar $(SPARK_TEST_JAR_PATH)
 
+PYTEST_ARGS := -vv
 test: cluster-url test-env $(DCOS_TEST_JAR_PATH) $(SPARK_TEST_JAR_PATH) stub-universe-url
 	source $(ROOT_DIR)/test-env/bin/activate
 	if [ -z $(CLUSTER_URL) ]; then \
@@ -172,7 +169,7 @@ test: cluster-url test-env $(DCOS_TEST_JAR_PATH) $(SPARK_TEST_JAR_PATH) stub-uni
 	dcos package repo add --index=0 spark-aws `cat stub-universe-url`
 	SCALA_TEST_JAR=$(DCOS_TEST_JAR_PATH) \
 	  TEST_JAR_PATH=$(SPARK_TEST_JAR_PATH) \
-	  py.test -vv $(ROOT_DIR)/tests
+	  py.test $(PYTEST_ARGS) $(ROOT_DIR)/tests
 
 clean: clean-dist clean-test-env
 
