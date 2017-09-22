@@ -1,5 +1,5 @@
 ROOT_DIR := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
-TOOLS_DIR := $(ROOT_DIR)/bin/dcos-commons-tools
+TOOLS_DIR := $(ROOT_DIR)/tools
 BUILD_DIR := $(ROOT_DIR)/build
 CLI_DIST_DIR := $(BUILD_DIR)/cli_dist
 DIST_DIR := $(BUILD_DIR)/dist
