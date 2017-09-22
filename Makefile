@@ -167,7 +167,7 @@ test: test-env $(DCOS_TEST_JAR_PATH) $(SPARK_TEST_JAR_PATH) $(UNIVERSE_URL_PATH)
         $(TOOLS_DIR)/setup_permissions.sh root hdfs-role; \
     fi; \
 	dcos package repo add --index=0 spark-aws `cat stub-universe-url`
-	SCALA_TEST_JAR=$(DCOS_TEST_JAR_PATH) \
+	SCALA_TEST_JAR_PATH=$(DCOS_TEST_JAR_PATH) \
 	  TEST_JAR_PATH=$(SPARK_TEST_JAR_PATH) \
 	  py.test $(PYTEST_ARGS) $(ROOT_DIR)/tests
 
