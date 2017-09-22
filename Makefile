@@ -169,6 +169,8 @@ test: test-env $(DCOS_TEST_JAR_PATH) $(SPARK_TEST_JAR_PATH) $(UNIVERSE_URL_PATH)
 	dcos package repo add --index=0 spark-aws `cat stub-universe-url`
 	SCALA_TEST_JAR_PATH=$(DCOS_TEST_JAR_PATH) \
 	  TEST_JAR_PATH=$(SPARK_TEST_JAR_PATH) \
+	  S3_BUCKET=$(S3_BUCKET) \
+	  S3_PREFIX=$(S3_PREFIX) \
 	  py.test $(PYTEST_ARGS) $(ROOT_DIR)/tests
 
 clean:
