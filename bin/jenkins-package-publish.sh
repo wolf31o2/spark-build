@@ -2,6 +2,11 @@
 
 set -e -x -o pipefail
 
+# $1: hadoop version (e.g. "2.6")
+function docker_version() {
+    echo "${SPARK_BUILD_VERSION}-hadoop-$1"
+}
+
 function publish_docker_images() {
     local NUM_SPARK_DIST=$(jq ".spark_dist | length" manifest.json)
     local NUM_SPARK_DIST=$(expr ${NUM_SPARK_DIST} - 1)
@@ -36,7 +41,6 @@ source "${DIR}/jenkins.sh"
 
 pushd "${SPARK_BUILD_DIR}"
 SPARK_VERSION=$(jq -r ".spark_version" manifest.json)
-docker_login
 publish_docker_images
 make_universe
 write_properties
