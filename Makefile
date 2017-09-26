@@ -7,7 +7,7 @@ SHELL := /bin/bash
 SHELLFLAGS := -e
 CLI_VERSION := $(shell jq -r ".cli_version" "$(ROOT_DIR)/manifest.json")
 HADOOP_VERSION := $(shell jq ".default_spark_dist.hadoop_version" "$(ROOT_DIR)/manifest.json")
-SPARK_DIST_URI := $(shell jq ".default_spark_dist.uri" "$(ROOT_DIR)/manifest.json")
+SPARK_DIST_URL := $(shell jq ".default_spark_dist.uri" "$(ROOT_DIR)/manifest.json")
 GIT_COMMIT := $(shell git rev-parse HEAD)
 
 DOCKER_DIST_IMAGE := mesosphere/spark-dev:$(GIT_COMMIT)
@@ -24,11 +24,6 @@ $(SPARK_DIR):
 docker-build:
 	docker build -t $(DOCKER_BUILD_IMAGE) .
 	echo $(DOCKER_BUILD_IMAGE) > $@
-
-manifest-dist:
-	mkdir -p $(DIST_DIR)
-	cd $(DIST_DIR)
-	wget $(SPARK_DIST_URI)
 
 dev-dist: $(SPARK_DIR)
 	cd $(SPARK_DIR)
@@ -74,7 +69,11 @@ prod-dist: $(SPARK_DIR)
 
 # this target serves as default dist type
 $(DIST_DIR):
-	$(MAKE) manifest-dist
+	$(MAKE) dev-dist
+
+spark-dist-url: $(DIST_DIR)
+	aws s3 cp --acl public-read "$(DIST_DIR)/$(spark_dist)" "s3://$(S3_BUCKET)/$(S3_PREFIX)/spark/$(GIT_COMMIT)/"
+	echo "http://$(S3_BUCKET).s3.amazonaws.com/$(S3_PREFIX)/spark/$(GIT_COMMIT)/$(spark_dist)" > spark-dist-url
 
 docker-login:
 	docker login --email="${DOCKER_EMAIL}" --username="${DOCKER_USERNAME}" --password="${DOCKER_PASSWORD}"
@@ -99,11 +98,10 @@ $(CLI_DIST_DIR):
 	mv $(ROOT_DIR)/cli/python/dist/*.whl $@/
 
 UNIVERSE_URL_PATH := stub-universe-url
-$(UNIVERSE_URL_PATH): $(CLI_DIST_DIR) $(DIST_DIR)
-	aws s3 cp --acl public-read "$(DIST_DIR)/$(spark_dist)" "s3://$(S3_BUCKET)/$(S3_PREFIX)/spark/$(GIT_COMMIT)/"
+$(UNIVERSE_URL_PATH): $(CLI_DIST_DIR)
 	UNIVERSE_URL_PATH=$(UNIVERSE_URL_PATH) \
 	TEMPLATE_CLI_VERSION=$(CLI_VERSION) \
-	TEMPLATE_SPARK_DIST_URI="http://$(S3_BUCKET).s3.amazonaws.com/$(S3_PREFIX)/spark/$(GIT_COMMIT)/$(spark_dist)" \
+	TEMPLATE_SPARK_DIST_URI=$(SPARK_DIST_URL) \
 	TEMPLATE_DOCKER_IMAGE=$(DOCKER_DIST_IMAGE) \
 		$(TOOLS_DIR)/publish_aws.py \
 		spark \
