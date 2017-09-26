@@ -97,7 +97,7 @@ docker-dist: $(DIST_DIR)
 	cp -r docker/* $(BUILD_DIR)/docker
 	cd $(BUILD_DIR)/docker && docker build -t $(DOCKER_DIST_IMAGE) .
 	docker push $(DOCKER_DIST_IMAGE)
-	echo "$(DOCKER_DIST_IMAGE)" > $@
+	echo "$(DOCKER_DIST_IMAGE)" > $(ROOT_DIR)/$@
 	[ -f $@ ] || exit 1
 
 CLI_VERSION := $(shell jq -r ".cli_version" "$(ROOT_DIR)/manifest.json")
