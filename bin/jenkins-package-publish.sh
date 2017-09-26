@@ -13,35 +13,28 @@ function publish_docker_images() {
     for i in $(seq 0 ${NUM_SPARK_DIST});
     do
         local HADOOP_VERSION=$(jq -r ".spark_dist[${i}].hadoop_version" manifest.json)
-
-        SPARK_DIST_URI=$(jq -r ".spark_dist[${i}].uri" manifest.json) \
-                      DOCKER_IMAGE="${DOCKER_IMAGE}:$(docker_version ${HADOOP_VERSION})" \
-                      make docker
+        make docker-dist \
+            -e SPARK_DIST_URL=$(jq -r ".spark_dist[${i}].uri" manifest.json) \
+            -e DOCKER_DIST_IMAGE="${DOCKER_DIST_IMAGE}:$(docker_version ${HADOOP_VERSION})"
+        rm docker-dist # delete the docker-dist make target to clean
+        make clean-dist
     done
 }
+
 
 function make_universe() {
     DOCKER_VERSION=$(docker_version $(default_hadoop_version))
 
-    DOCKER_BUILD=false \
-                DOCKER_IMAGE=${DOCKER_IMAGE}:${DOCKER_VERSION} \
-                SPARK_DIST_URI=$(default_spark_dist) \
-                make universe
-}
-
-function write_properties() {
-    cp "${WORKSPACE}/stub-universe.properties" ../build.properties
-    echo "RELEASE_VERSION=${SPARK_BUILD_VERSION}" >> ../build.properties
+    rm spark-dist-url
+    make manifest-dist # use default manifest spark
+    make stub-universe-url -e DOCKER_IMAGE=${DOCKER_DIST_IMAGE}:${DOCKER_VERSION}
 }
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-SPARK_BUILD_DIR=${DIR}/../../spark-build
+SPARK_BUILD_DIR=${DIR}/..
 SPARK_BUILD_VERSION=${GIT_BRANCH#origin/tags/}
-source "${DIR}/jenkins.sh"
 
 pushd "${SPARK_BUILD_DIR}"
-SPARK_VERSION=$(jq -r ".spark_version" manifest.json)
 publish_docker_images
 make_universe
-write_properties
 popd

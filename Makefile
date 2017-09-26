@@ -20,7 +20,6 @@ docker-build:
 # Pulls the spark distribution listed in the manifest as default
 SPARK_DIST_URL := $(shell jq ".default_spark_dist.uri" "$(ROOT_DIR)/manifest.json")
 manifest-dist:
-	[ ! -d $(DIST_DIR) ] || rm -rf $(DIST_DIR)
 	mkdir -p $(DIST_DIR)
 	pushd $(DIST_DIR)
 	wget $(SPARK_DIST_URL)
@@ -80,6 +79,9 @@ prod-dist: $(SPARK_DIR)
 $(DIST_DIR):
 	$(MAKE) manifest-dist
 
+clean-dist:
+	[ ! -e $(DIST_DIR) ] || rm -rf $(DIST_DIR)
+
 spark-dist-url: $(DIST_DIR)
 	aws s3 cp --acl public-read "$(DIST_DIR)/$(spark_dist)" "s3://$(S3_BUCKET)/$(S3_PREFIX)/spark/$(GIT_COMMIT)/"
 	echo "http://$(S3_BUCKET).s3.amazonaws.com/$(S3_PREFIX)/spark/$(GIT_COMMIT)/$(spark_dist)" > spark-dist-url
@@ -95,9 +97,11 @@ docker-dist: $(DIST_DIR)
 	cp -r $(DIST_DIR)/spark-*/. $(BUILD_DIR)/docker/dist
 	cp -r conf/* $(BUILD_DIR)/docker/dist/conf
 	cp -r docker/* $(BUILD_DIR)/docker
-	cd $(BUILD_DIR)/docker && docker build -t $(DOCKER_DIST_IMAGE) .
+	pushd $(BUILD_DIR)/docker
+	docker build -t $(DOCKER_DIST_IMAGE) .
+	popd
 	docker push $(DOCKER_DIST_IMAGE)
-	echo "$(DOCKER_DIST_IMAGE)" > $(ROOT_DIR)/$@
+	echo "$(DOCKER_DIST_IMAGE)" > $@
 	[ -f $(ROOT_DIR)/$@ ] || exit 1
 
 CLI_VERSION := $(shell jq -r ".cli_version" "$(ROOT_DIR)/manifest.json")
@@ -183,10 +187,9 @@ test: test-env $(DCOS_TEST_JAR_PATH) $(SPARK_TEST_JAR_PATH) $(UNIVERSE_URL_PATH)
 	  S3_PREFIX=$(S3_PREFIX) \
 	  py.test $(PYTEST_ARGS) $(ROOT_DIR)/tests
 
-clean:
+clean: clean-dist
 	rm -rf $(ROOT_DIR)/test-env
 	rm -rf $(CLI_DIST_DIR)
-	rm -rf $(DIST_DIR)
 
 define spark_dist
 `cd $(DIST_DIR) && ls spark-*.tgz`
@@ -212,4 +215,4 @@ ssh_user: core
 endef
 
 
-.PHONY: clean manifest-dist dev-dist prod-dist docker-login test
+.PHONY: clean clean-dist manifest-dist dev-dist prod-dist docker-login test
