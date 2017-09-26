@@ -4,27 +4,36 @@ BUILD_DIR := $(ROOT_DIR)/build
 CLI_DIST_DIR := $(BUILD_DIR)/cli_dist
 DIST_DIR := $(BUILD_DIR)/dist
 SHELL := /bin/bash
-SHELLFLAGS := -e
-CLI_VERSION := $(shell jq -r ".cli_version" "$(ROOT_DIR)/manifest.json")
-HADOOP_VERSION := $(shell jq ".default_spark_dist.hadoop_version" "$(ROOT_DIR)/manifest.json")
-SPARK_DIST_URL := $(shell jq ".default_spark_dist.uri" "$(ROOT_DIR)/manifest.json")
 GIT_COMMIT := $(shell git rev-parse HEAD)
 
-DOCKER_DIST_IMAGE := mesosphere/spark-dev:$(GIT_COMMIT)
-DOCKER_BUILD_IMAGE := mesosphere/spark-build:$(GIT_COMMIT)
 S3_BUCKET := infinity-artifacts
 S3_PREFIX := autodelete7d
 
 .ONESHELL:
 
-SPARK_DIR := $(ROOT_DIR)/spark
-$(SPARK_DIR):
-	git clone https://github.com/mesosphere/spark $(SPARK_DIR)
-
+# This image can be used to build spark dist and run tests
+DOCKER_BUILD_IMAGE := mesosphere/spark-build:$(GIT_COMMIT)
 docker-build:
 	docker build -t $(DOCKER_BUILD_IMAGE) .
 	echo $(DOCKER_BUILD_IMAGE) > $@
 
+# Pulls the spark distribution listed in the manifest as default
+SPARK_DIST_URL := $(shell jq ".default_spark_dist.uri" "$(ROOT_DIR)/manifest.json")
+manifest-dist:
+	[ ! -d $(DIST_DIR) ] || rm -rf $(DIST_DIR)
+	mkdir -p $(DIST_DIR)
+	pushd $(DIST_DIR)
+	wget $(SPARK_DIST_URL)
+	popd
+	echo "$(SPARK_DIST_URL)" > spark-dist-url
+
+HADOOP_VERSION := $(shell jq ".default_spark_dist.hadoop_version" "$(ROOT_DIR)/manifest.json")
+
+SPARK_DIR := $(ROOT_DIR)/spark
+$(SPARK_DIR):
+	git clone https://github.com/mesosphere/spark $(SPARK_DIR)
+
+# Builds a quick dev version of spark from the mesosphere fork
 dev-dist: $(SPARK_DIR)
 	cd $(SPARK_DIR)
 	rm -rf spark-*.tgz
@@ -55,21 +64,21 @@ prod-dist: $(SPARK_DIR)
 	cd $(SPARK_DIR)
 	rm -rf spark-*.tgz
 	if [ -f make-distribution.sh ]; then \
-		./make-distribution.sh --tgz "-Phadoop-${HADOOP_VERSION}" -Phive -Phive-thriftserver -DskipTests; \
+		./make-distribution.sh --tgz "-Phadoop-$(HADOOP_VERSION)" -Phive -Phive-thriftserver -DskipTests; \
 	else \
 		if [ -n $(does_profile_exist,mesos) ]; then \
 			MESOS_PROFILE="-Pmesos"; \
 		else \
 			MESOS_PROFILE=""; \
 		fi; \
-		./dev/make-distribution.sh --tgz "${MESOS_PROFILE}" "-Phadoop-${HADOOP_VERSION}" -Psparkr -Phive -Phive-thriftserver -DskipTests; \
+		./dev/make-distribution.sh --tgz "${MESOS_PROFILE}" "-Phadoop-$(HADOOP_VERSION)" -Psparkr -Phive -Phive-thriftserver -DskipTests; \
 	fi; \
 	mkdir -p $(DIST_DIR)
 	cp spark-*.tgz $(DIST_DIR)
 
 # this target serves as default dist type
 $(DIST_DIR):
-	$(MAKE) dev-dist
+	$(MAKE) manifest-dist
 
 spark-dist-url: $(DIST_DIR)
 	aws s3 cp --acl public-read "$(DIST_DIR)/$(spark_dist)" "s3://$(S3_BUCKET)/$(S3_PREFIX)/spark/$(GIT_COMMIT)/"
@@ -78,6 +87,7 @@ spark-dist-url: $(DIST_DIR)
 docker-login:
 	docker login --email="${DOCKER_EMAIL}" --username="${DOCKER_USERNAME}" --password="${DOCKER_PASSWORD}"
 
+DOCKER_DIST_IMAGE := mesosphere/spark-dev:$(GIT_COMMIT)
 docker-dist: $(DIST_DIR)
 	tar xvf $(DIST_DIR)/spark-*.tgz -C $(DIST_DIR)
 	rm -rf $(BUILD_DIR)/docker
@@ -89,6 +99,7 @@ docker-dist: $(DIST_DIR)
 	docker push $(DOCKER_DIST_IMAGE)
 	echo $(DOCKER_DIST_IMAGE) > $@
 
+CLI_VERSION := $(shell jq -r ".cli_version" "$(ROOT_DIR)/manifest.json")
 $(CLI_DIST_DIR):
 	$(MAKE) --directory=cli all
 	mkdir -p $@
@@ -98,11 +109,11 @@ $(CLI_DIST_DIR):
 	mv $(ROOT_DIR)/cli/python/dist/*.whl $@/
 
 UNIVERSE_URL_PATH := stub-universe-url
-$(UNIVERSE_URL_PATH): $(CLI_DIST_DIR)
+$(UNIVERSE_URL_PATH): $(CLI_DIST_DIR) $(DIST_DIR) docker-dist spark-dist-url
 	UNIVERSE_URL_PATH=$(UNIVERSE_URL_PATH) \
 	TEMPLATE_CLI_VERSION=$(CLI_VERSION) \
-	TEMPLATE_SPARK_DIST_URI=$(SPARK_DIST_URL) \
-	TEMPLATE_DOCKER_IMAGE=$(DOCKER_DIST_IMAGE) \
+	TEMPLATE_SPARK_DIST_URI=`cat spark-dist-url` \
+	TEMPLATE_DOCKER_IMAGE=`cat docker-dist` \
 		$(TOOLS_DIR)/publish_aws.py \
 		spark \
         $(ROOT_DIR)/universe/ \
