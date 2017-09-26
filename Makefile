@@ -24,7 +24,6 @@ manifest-dist:
 	pushd $(DIST_DIR)
 	wget $(SPARK_DIST_URL)
 	popd
-	echo "$(SPARK_DIST_URL)" > spark-dist-url
 
 HADOOP_VERSION := $(shell jq ".default_spark_dist.hadoop_version" "$(ROOT_DIR)/manifest.json")
 
@@ -82,10 +81,6 @@ $(DIST_DIR):
 clean-dist:
 	[ ! -e $(DIST_DIR) ] || rm -rf $(DIST_DIR)
 
-spark-dist-url: $(DIST_DIR)
-	aws s3 cp --acl public-read "$(DIST_DIR)/$(spark_dist)" "s3://$(S3_BUCKET)/$(S3_PREFIX)/spark/$(GIT_COMMIT)/"
-	echo "http://$(S3_BUCKET).s3.amazonaws.com/$(S3_PREFIX)/spark/$(GIT_COMMIT)/$(spark_dist)" > spark-dist-url
-
 docker-login:
 	docker login --email="${DOCKER_EMAIL}" --username="${DOCKER_USERNAME}" --password="${DOCKER_PASSWORD}"
 
@@ -102,7 +97,7 @@ docker-dist: $(DIST_DIR)
 	popd
 	docker push $(DOCKER_DIST_IMAGE)
 	echo "$(DOCKER_DIST_IMAGE)" > $@
-	[ -f $(ROOT_DIR)/$@ ] || exit 1
+	[ -f $@ ] || exit 1
 
 CLI_VERSION := $(shell jq -r ".cli_version" "$(ROOT_DIR)/manifest.json")
 $(CLI_DIST_DIR):
@@ -114,10 +109,9 @@ $(CLI_DIST_DIR):
 	mv $(ROOT_DIR)/cli/python/dist/*.whl $@/
 
 UNIVERSE_URL_PATH := stub-universe-url
-$(UNIVERSE_URL_PATH): $(CLI_DIST_DIR) $(DIST_DIR) docker-dist spark-dist-url
+$(UNIVERSE_URL_PATH): $(CLI_DIST_DIR) docker-dist
 	UNIVERSE_URL_PATH=$(UNIVERSE_URL_PATH) \
 	TEMPLATE_CLI_VERSION=$(CLI_VERSION) \
-	TEMPLATE_SPARK_DIST_URI=`cat spark-dist-url` \
 	TEMPLATE_DOCKER_IMAGE=`cat docker-dist` \
 		$(TOOLS_DIR)/publish_aws.py \
 		spark \
