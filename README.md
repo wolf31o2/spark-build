@@ -25,6 +25,8 @@ required. Rather, it provides a consistent and portable environment for
 
 ### Spark Distribution
 A spark distribution is required to create a spark framework package.
+These distributions (packaged as tarballs) are bundled with a Docker
+image built in the `docker-dist` target below.
 There are three flavors of distribution that can be made:
 ```bash
 make manifest-dist
@@ -34,7 +36,8 @@ This command will simply retrieve the spark dist URI set in the manifest.
 
 The following two methods builds from source. By default the mesosphere/spark
 repository will be used but one can use the `SPARK_DIR` override to use any
-arbitrary spark repository.
+arbitrary spark source directory. Additionally, `HADOOP_VERSION` may be
+provided as an override as only the default in the manifest is built.
 
 ```bash
 make prod-dist
@@ -50,9 +53,8 @@ most common way to build a Spark package during development.
 
 
 ### Package
-Whatever spark distribution is chosen, it must have its own CLI built as
-well as a docker image that will contain the distribution for injection
-into the package template.
+The above distribution needs to be bundled into a docker image and paried with
+a CLI in order to complete the package.
 
 ```bash
 make cli
@@ -65,19 +67,26 @@ make docker-dist
 ```
 This command will build and push the docker image that will be used by
 the package template. Use `DOCKER_DIST_IMAGE` override to set an alternative
-dockerhub repo. Note: the login is a separate command to allow using the
-current docker user session without providing parameters
+dockerhub repo. Addtionally, the tag for this container will be the git SHA
+unless overridden with `GIT_COMMIT`. Note: the login is a separate command
+to allow using the current docker user session without providing parameters
 
 ```bash
-make universe
+make stub-universe-url
 ```
 This will build a "stub" universe (i.e. singleton repo) containing a
-Spark package. The aforementioned build targets of docker-dist and cli are
-required by this step and will be built according to defaults if not
+Spark package and upload it. The aforementioned build targets of docker-dist
+and cli are required by this step and will be built according to defaults if not
 explicitly built before this step is run.
 
-
 ## Test
+
+```bash
+make cluster-url
+```
+This command will spin up a cluster unless `CLUSTER_URL` is set in the current
+environment. A cluster is required to satisfy the testing target. The URL of
+this cluster will be left in a file called `cluster-url`.
 
 ```bash
 make test-env
@@ -90,7 +99,7 @@ make cluster_info.json
 ```
 This command will make a cluster that can be used for integration testing.
 Alternatively, if `CLUSTER_URL` is already set in the environment, this step
-will do nothing.
+will do nothing, and the cluster pointed to will be used.
 
 ```bash
 make test
@@ -101,8 +110,9 @@ This includes:
 make manifest-dist
 make docker-dist
 make cli
-make stub-universe.properties
+make stub-universe-url
 make test-env
+make cluster_info.json
 make test-cluster
 ```
 Note: these steps can all be individually triggered to allow specifying

@@ -19,11 +19,11 @@ docker-build:
 	echo $(DOCKER_BUILD_IMAGE) > $@
 
 # Pulls the spark distribution listed in the manifest as default
-SPARK_DIST_URL := $(shell jq ".default_spark_dist.uri" "$(ROOT_DIR)/manifest.json")
+SPARK_DIST_URI := $(shell jq ".default_spark_dist.uri" "$(ROOT_DIR)/manifest.json")
 manifest-dist:
 	mkdir -p $(DIST_DIR)
 	pushd $(DIST_DIR)
-	wget $(SPARK_DIST_URL)
+	wget $(SPARK_DIST_URI)
 	popd
 
 HADOOP_VERSION := $(shell jq ".default_spark_dist.hadoop_version" "$(ROOT_DIR)/manifest.json")
@@ -43,9 +43,9 @@ dev-dist: $(SPARK_DIR)
 	mkdir -p /tmp/spark-SNAPSHOT/examples/jars
 	cp -r examples/target/scala*/jars/* /tmp/spark-SNAPSHOT/examples/jars
 	for f in /tmp/spark-SNAPSHOT/examples/jars/*; do \
-		name=$(basename "$f"); \
-		if [ -f "/tmp/spark-SNAPSHOT/jars/${name}" ]; then \
-			rm "/tmp/spark-SNAPSHOT/examples/jars/${name}"; \
+		name=$$(basename "$$f"); \
+		if [ -f "/tmp/spark-SNAPSHOT/jars/$${name}" ]; then \
+			rm "/tmp/spark-SNAPSHOT/examples/jars/$${name}"; \
 		fi; \
 	done; \
 	cp -r data /tmp/spark-SNAPSHOT/
@@ -70,7 +70,7 @@ prod-dist: $(SPARK_DIR)
 		else \
 			MESOS_PROFILE=""; \
 		fi; \
-		./dev/make-distribution.sh --tgz "${MESOS_PROFILE}" "-Phadoop-$(HADOOP_VERSION)" -Psparkr -Phive -Phive-thriftserver -DskipTests; \
+		./dev/make-distribution.sh --tgz "$${MESOS_PROFILE}" "-Phadoop-$(HADOOP_VERSION)" -Psparkr -Phive -Phive-thriftserver -DskipTests; \
 	fi; \
 	mkdir -p $(DIST_DIR)
 	cp spark-*.tgz $(DIST_DIR)
@@ -80,10 +80,10 @@ $(DIST_DIR):
 	$(MAKE) manifest-dist
 
 clean-dist:
-	[ ! -e $(DIST_DIR) ] || rm -rf $(DIST_DIR)
+	@[ ! -e $(DIST_DIR) ] || rm -rf $(DIST_DIR)
 
 docker-login:
-	docker login --email="${DOCKER_EMAIL}" --username="${DOCKER_USERNAME}" --password="${DOCKER_PASSWORD}"
+	docker login --email="$(DOCKER_EMAIL)" --username="$(DOCKER_USERNAME)" --password="$(DOCKER_PASSWORD)"
 
 DOCKER_DIST_IMAGE := mesosphere/spark-dev:$(GIT_COMMIT)
 docker-dist: $(DIST_DIR)
@@ -128,11 +128,11 @@ $(DCOS_TEST_JAR_PATH):
 	cp $(ROOT_DIR)/tests/jobs/scala/target/scala-2.11/dcos-spark-scala-tests-assembly-0.1-SNAPSHOT.jar $(DCOS_TEST_JAR_PATH)
 
 test-env:
-	python3 -m venv $(ROOT_DIR)/test-env
-	source $(ROOT_DIR)/test-env/bin/activate
-	pip3 install -r $(ROOT_DIR)/tests/requirements.txt
+	python3 -m venv test-env
+	source test-env/bin/activate
+	pip3 install -r tests/requirements.txt
 
-cluster-url: test-env
+cluster-url:
 	$(eval export DCOS_LAUNCH_CONFIG_BODY)
 	@if [ -z $(CLUSTER_URL) ]; then \
 	  source $(ROOT_DIR)/test-env/bin/activate; \
@@ -144,6 +144,10 @@ cluster-url: test-env
 	  echo "CLUSTER_URL detected in env; not deploying a new cluster"; \
 	  echo $(CLUSTER_URL) > $@; \
 	fi; \
+
+clean-cluster:
+	@dcos-launch delete || echo "Error deleting cluster"
+	[ ! -e cluster-url ] || rm cluster-url
 
 mesos-spark-integration-tests:
 	git clone https://github.com/typesafehub/mesos-spark-integration-tests $(ROOT_DIR)/mesos-spark-integration-tests
@@ -180,9 +184,14 @@ test: test-env $(DCOS_TEST_JAR_PATH) $(SPARK_TEST_JAR_PATH) $(UNIVERSE_URL_PATH)
 	  S3_PREFIX=$(S3_PREFIX) \
 	  py.test $(PYTEST_ARGS) $(ROOT_DIR)/tests
 
-clean: clean-dist
-	rm -rf $(ROOT_DIR)/test-env
+clean: clean-dist clean-cluster
+	rm -rf test-env
 	rm -rf $(CLI_DIST_DIR)
+	for f in  "$(SPARK_TEST_JAR_PATH)" "$(DCOS_TEST_JAR_PATH)" "cluster-url" "$(UNIVERSE_URL_PATH)" "docker-build" "docker-dist" ; do \
+		[ ! -e $$f ] || rm $$f; \
+	done; \
+
+
 
 define spark_dist
 `cd $(DIST_DIR) && ls spark-*.tgz`
@@ -208,4 +217,4 @@ ssh_user: core
 endef
 
 
-.PHONY: clean clean-dist manifest-dist dev-dist prod-dist docker-login test
+.PHONY: clean clean-dist clean-cluster manifest-dist dev-dist prod-dist docker-login test
