@@ -3,13 +3,14 @@ TOOLS_DIR := $(ROOT_DIR)/tools
 BUILD_DIR := $(ROOT_DIR)/build
 CLI_DIST_DIR := $(BUILD_DIR)/cli_dist
 DIST_DIR := $(BUILD_DIR)/dist
-SHELL := /bin/bash
 GIT_COMMIT := $(shell git rev-parse HEAD)
 
 S3_BUCKET := infinity-artifacts
 S3_PREFIX := autodelete7d
 
 .ONESHELL:
+SHELL := /bin/bash
+.SHELLFLAGS = -ec
 
 # This image can be used to build spark dist and run tests
 DOCKER_BUILD_IMAGE := mesosphere/spark-build:$(GIT_COMMIT)
@@ -97,7 +98,6 @@ docker-dist: $(DIST_DIR)
 	popd
 	docker push $(DOCKER_DIST_IMAGE)
 	echo "$(DOCKER_DIST_IMAGE)" > $@
-	[ -f $@ ] || exit 1
 
 CLI_VERSION := $(shell jq -r ".cli_version" "$(ROOT_DIR)/manifest.json")
 $(CLI_DIST_DIR):
@@ -120,7 +120,6 @@ $(UNIVERSE_URL_PATH): $(CLI_DIST_DIR) docker-dist
         $(CLI_DIST_DIR)/dcos-spark-linux \
         $(CLI_DIST_DIR)/dcos-spark.exe \
         $(CLI_DIST_DIR)/*.whl; \
-	[ -f $@ ] || exit 1
 
 DCOS_TEST_JAR_PATH := $(ROOT_DIR)/dcos-spark-scala-tests-assembly-0.1-SNAPSHOT.jar
 $(DCOS_TEST_JAR_PATH):
@@ -138,8 +137,8 @@ cluster-url: test-env
 	@if [ -z $(CLUSTER_URL) ]; then \
 	  source $(ROOT_DIR)/test-env/bin/activate; \
 	  echo "$$DCOS_LAUNCH_CONFIG_BODY" > dcos_launch_config.yaml; \
-	  dcos-launch create -c dcos_launch_config.yaml || exit 1; \
-	  dcos-launch wait || exit 1; \
+	  dcos-launch create -c dcos_launch_config.yaml; \
+	  dcos-launch wait; \
 	  echo https://`dcos-launch describe | jq -r .masters[0].public_ip` > $@; \
 	else \
 	  echo "CLUSTER_URL detected in env; not deploying a new cluster"; \
