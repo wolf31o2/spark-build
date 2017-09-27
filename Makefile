@@ -139,7 +139,7 @@ cluster-url: test-env
 	  source $(ROOT_DIR)/test-env/bin/activate; \
 	  echo "$$DCOS_LAUNCH_CONFIG_BODY" > dcos_launch_config.yaml; \
 	  dcos-launch create -c dcos_launch_config.yaml || exit 1; \
-	  dcos-launch wait; \
+	  dcos-launch wait || exit 1; \
 	  echo https://`dcos-launch describe | jq -r .masters[0].public_ip` > $@; \
 	else \
 	  echo "CLUSTER_URL detected in env; not deploying a new cluster"; \
