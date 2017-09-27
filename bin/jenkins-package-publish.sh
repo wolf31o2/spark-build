@@ -14,7 +14,7 @@ function publish_docker_images() {
     do
         local HADOOP_VERSION=$(jq -r ".spark_dist[${i}].hadoop_version" manifest.json)
         make docker-dist \
-            -e SPARK_DIST_URL=$(jq -r ".spark_dist[${i}].uri" manifest.json) \
+            -e SPARK_DIST_URI=$(jq -r ".spark_dist[${i}].uri" manifest.json) \
             -e DOCKER_DIST_IMAGE="${DOCKER_DIST_IMAGE}:$(docker_version ${HADOOP_VERSION})"
         rm docker-dist # delete the docker-dist make target to clean
         make clean-dist
@@ -25,9 +25,13 @@ function publish_docker_images() {
 function make_universe() {
     DOCKER_VERSION=$(docker_version $(default_hadoop_version))
 
-    rm spark-dist-url
     make manifest-dist # use default manifest spark
     make stub-universe-url -e DOCKER_IMAGE=${DOCKER_DIST_IMAGE}:${DOCKER_VERSION}
+}
+
+function write_properties() {
+  cp "${WORKSPACE}/stub-universe.properties" ../build.properties
+  echo "RELEASE_VERSION=${SPARK_BUILD_VERSION}" >> ../build.properties
 }
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -37,4 +41,5 @@ SPARK_BUILD_VERSION=${GIT_BRANCH#origin/tags/}
 pushd "${SPARK_BUILD_DIR}"
 publish_docker_images
 make_universe
+write_properties
 popd
